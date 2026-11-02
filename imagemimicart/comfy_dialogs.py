@@ -298,18 +298,18 @@ class ComfySettingsDialog(QDialog):
 
         layout = QVBoxLayout(self)
         layout.addWidget(self.tabs, 1)
-        # 出力フォルダ (この下に、元画像のフォルダ名で分けて保存する)
+        # 出力フォルダ (この下に、親フォルダ名_元画像のフォルダ名で分けて保存する)
         out_row = QHBoxLayout()
         out_row.addWidget(QLabel("出力フォルダ"))
         self.output_edit = QLineEdit(comfy.output_folder())
         self.output_edit.setToolTip(
-            "生成した画像は「出力フォルダ\\(元画像のフォルダ名)\\(元の名前)_mimic.png」に保存します"
+            "生成した画像は「出力フォルダ\\(親フォルダ名)_(元画像のフォルダ名)\\(元の名前)_mimic.png」に保存します"
         )
         out_row.addWidget(self.output_edit, 1)
         out_browse = QPushButton("参照...")
         out_row.addWidget(out_browse)
         layout.addLayout(out_row)
-        layout.addWidget(_hint("生成した画像は「出力フォルダ\\(元画像のフォルダ名)\\(元の名前)_mimic.png」に保存します。"))
+        layout.addWidget(_hint("生成した画像は「出力フォルダ\\(親フォルダ名)_(元画像のフォルダ名)\\(元の名前)_mimic.png」に保存します。"))
         self.open_result = QCheckBox("生成が終わったら、出来たファイルを元画像と並べて見せる (まとめて生成のときは見せません)")
         self.open_result.setChecked(comfy.open_result())
         layout.addWidget(self.open_result)

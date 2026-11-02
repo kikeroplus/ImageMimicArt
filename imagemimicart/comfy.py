@@ -2,7 +2,7 @@
 
 説明プロンプト (盛ったときは盛った本文) をワークフローのプロンプトの場所に入れ、
 ベースプロンプトを改行をはさんで後ろに付ける。ワークフローに LoadImage があれば元画像も送る。
-出来たファイルは「出力フォルダ\\(元画像のフォルダ名)\\(元の名前)_mimic.png」に保存する。
+出来たファイルは「出力フォルダ\\(親フォルダ名)_(元画像のフォルダ名)\\(元の名前)_mimic.png」に保存する。
 
 PromptWordCrafter の comfy.py を引き継いだもの。J-Rate の ComfyVideo.cs と同じ決まりごと
 (generation-standard.md) で、設定・記録・ワークフローの書き換え・ComfyUI とのやりとりを受け持つ。
@@ -139,7 +139,7 @@ class GenRequest:
     # 読み取るときの、登録した時点の読み取りプリセットの写し
     # (name・system・template・temperature・url・model・max_side)。記録から読んだものは name だけ
     reader: Optional[dict] = None
-    output_dir: str = ""  # 出力フォルダ (生成を始めたときのもの。この下に元画像のフォルダ名で分ける)
+    output_dir: str = ""  # 出力フォルダ (生成を始めたときのもの。この下に親フォルダ名_元画像のフォルダ名で分ける)
 
     @property
     def reader_name(self) -> str:
@@ -392,13 +392,17 @@ def set_output_folder(path: str) -> None:
 
 
 def output_dir_for(source: str, root: str) -> Path:
-    """元画像の出力先: 出力フォルダ\\(元画像のフォルダ名)。
-    ドライブや共有の直下の画像は、フォルダ名の代わりに「C」「RAVEN_SharBox」のような名前にする。"""
+    """元画像の出力先: 出力フォルダ\\(親フォルダ名)_(元画像のフォルダ名)。
+    別の場所にある同じ名前のフォルダ (grok-image\\all と other\\all など) が混ざらないように、親の名前もつなげる。
+    ドライブや共有の直下に近いときは、名前のない段の代わりに「D」「RAVEN_SharBox」のような名前を使う。"""
+
+    def label(folder: Path) -> str:
+        return folder.name or "_".join(part for part in folder.anchor.replace(":", "").split("\\") if part) or "root"
+
     parent = Path(source).parent
-    name = parent.name
-    if not name:
-        name = "_".join(part for part in parent.anchor.replace(":", "").split("\\") if part) or "root"
-    return Path(root) / name
+    if not parent.name:
+        return Path(root) / label(parent)  # ドライブや共有の直下の画像
+    return Path(root) / f"{label(parent.parent)}_{parent.name}"
 
 
 def open_result() -> bool:
@@ -1162,7 +1166,7 @@ def generate(
             "Save Video / Save Image などの保存ノードがあるか確認してください。"
         )
 
-    # 出力フォルダ\\(元画像のフォルダ名)\\(元の名前)_mimic.(拡張子) で保存する
+    # 出力フォルダ\\(親フォルダ名)_(元画像のフォルダ名)\\(元の名前)_mimic.(拡張子) で保存する
     src = Path(source)
     if not req.output_dir:
         raise ComfyError("出力フォルダが決まっていません。「生成の設定」で出力フォルダを指定してください。")

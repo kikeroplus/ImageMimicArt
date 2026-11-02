@@ -58,13 +58,14 @@ class ImageModel(QAbstractListModel):
 
     loaded = Signal(str)  # フォルダを読み終わった (エラーの説明。うまくいけば空)
     thumbs_progress = Signal(int, int)  # 作ったサムネールの数, 全体
-    _folder_done = Signal(int, object, str)  # 依頼番号, entries, エラー
+    _folder_done = Signal(int, object, object, str)  # 依頼番号, entries, 相手のいない .txt, エラー
     _counts_done = Signal(int, object)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.folder: Optional[Path] = None
         self.entries: list[Entry] = []
+        self.orphans: list[Path] = []  # 同じ名前の画像がない .txt (説明だけ残っているもの)
         self.sort_mode = 0
         self.loading = False
         self._ticket = 0
@@ -133,15 +134,16 @@ class ImageModel(QAbstractListModel):
         self.beginResetModel()
         self.folder = folder
         self.entries = []
+        self.orphans = []
         self.endResetModel()
         self.loading = True
         self._thumb_ticket = self._loader.request([])
         self.drop_large()
 
         def work():
-            entries, error = [], ""
+            entries, orphans, error = [], [], ""
             try:
-                txt = set()
+                txt: dict[str, Path] = {}
                 with os.scandir(folder) as it:
                     for item in it:
                         try:
@@ -152,7 +154,7 @@ class ImageModel(QAbstractListModel):
                         path = Path(item.path)
                         suffix = path.suffix.lower()
                         if suffix == ".txt":
-                            txt.add(path.stem.lower())
+                            txt[path.stem.lower()] = path
                         elif suffix in IMAGE_EXTS:
                             try:
                                 mtime = item.stat().st_mtime
@@ -161,17 +163,20 @@ class ImageModel(QAbstractListModel):
                             entries.append(Entry(path, mtime))
                 for entry in entries:
                     entry.has_caption = entry.path.stem.lower() in txt
+                stems = {entry.path.stem.lower() for entry in entries}
+                orphans = sorted((p for stem, p in txt.items() if stem not in stems), key=lambda p: p.name.lower())
             except OSError as exc:
                 error = str(exc)
-            self._folder_done.emit(ticket, entries, error)
+            self._folder_done.emit(ticket, entries, orphans, error)
 
         threading.Thread(target=work, daemon=True).start()
 
-    def _on_folder_done(self, ticket: int, entries: list, error: str):
+    def _on_folder_done(self, ticket: int, entries: list, orphans: list, error: str):
         if ticket != self._ticket:
             return
         self.beginResetModel()
         self.entries = entries
+        self.orphans = orphans
         self._sort_entries()
         self.endResetModel()
         self.loading = False
@@ -259,6 +264,14 @@ class ImageModel(QAbstractListModel):
                 self.beginRemoveRows(QModelIndex(), row, row)
                 del self.entries[row]
                 self.endRemoveRows()
+        # 消した画像の .txt は、同じ名前の画像がもうなければ「説明だけ残っているもの」になる
+        stems = {e.path.stem.lower() for e in self.entries}
+        known = {results._key(p) for p in self.orphans}
+        for path in paths:
+            caption = path.with_suffix(".txt")
+            if path.stem.lower() not in stems and results._key(caption) not in known and caption.is_file():
+                self.orphans.append(caption)
+                known.add(results._key(caption))
 
     # ------------------------------------------------------------------
     # グリッドの中・大のサムネール (表示中の順に作る。小に戻すか閉じたら捨てる)

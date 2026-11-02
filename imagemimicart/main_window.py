@@ -33,7 +33,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from . import comfy, reader, results, settings
+from . import comfy, orphans, reader, results, settings
 from .caption_panel import CaptionPanel
 from .folder_tree import FolderTree, same_path
 from .generation import GenerationController
@@ -254,6 +254,11 @@ class MainWindow(QMainWindow):
         bar.addWidget(self.sort_combo)
         self.deselect_action = action("選択解除", "複数選択を解除して、表示中の 1 つだけにします (Ctrl+D)", self.clear_multi)
         action("グリッド一覧", "一覧をタイルで並べた別のウインドウを開きます (Ctrl+G)", self.show_grid)
+        self.newest_action = action("最新の結果と並べる",
+                                    "画像を表示したら、いちばん新しい生成結果を元画像の横に並べます (Esc でその画像だけやめる)",
+                                    self._toggle_newest)
+        self.newest_action.setCheckable(True)
+        self.newest_action.setChecked(settings.get("compare_newest.txt") != "0")
         bar.addSeparator()
         self.read_action = action("読み取る", "表示中の画像を LLM に読ませて、説明プロンプトを作ります (Ctrl+R)",
                                   self.read_current)
@@ -295,7 +300,9 @@ class MainWindow(QMainWindow):
         else:
             self.resize(1500, 900)
         sizes = settings.get_ints("splitter.txt", 3)
-        self.splitter.setSizes(sizes if sizes and all(s > 0 for s in sizes) else [240, 900, 420])
+        # 真ん中 (画像) が押しつぶされた幅は使わない
+        ok = sizes and all(s > 0 for s in sizes) and sizes[1] >= 400
+        self.splitter.setSizes(sizes if ok else [240, 900, 420])
 
     def _save_settings(self):
         g = self.normalGeometry() if self.isMaximized() else self.geometry()
@@ -359,6 +366,9 @@ class MainWindow(QMainWindow):
         self._pending_select = None
         self._update_count()
         self._update_actions()
+        if not error and self.model.orphans:
+            self.show_status(f"このフォルダには、同じ名前の画像がない .txt が {len(self.model.orphans)} 個あります"
+                             "  (右クリック →「説明だけ残っている .txt を整理」で確かめられます)")
 
     def _on_thumbs_progress(self, done: int, total: int):
         working = 0 < total and done < total
@@ -371,7 +381,8 @@ class MainWindow(QMainWindow):
 
     def _update_count(self):
         n = len(self.model.entries)
-        self.count_label.setText("" if self.model.folder is None else f"表示 {n} 枚")
+        orphan = f"  説明だけの .txt {len(self.model.orphans)} 個" if self.model.orphans else ""
+        self.count_label.setText("" if self.model.folder is None else f"表示 {n} 枚{orphan}")
 
     def _on_sort(self, mode: int):
         self.model.set_sort(mode)
@@ -426,10 +437,19 @@ class MainWindow(QMainWindow):
             self.view.show_image(str(path), preload)
             if self.panel.path is None or not results.same_path(path, self.panel.path):
                 self.panel.show_for(path)
+                if self.newest_action.isChecked():
+                    self.panel.results.compare_newest()
         self._scroll_to_current()
         self._update_info()
         self._update_actions()
         self._repaint_lists()
+
+    def _toggle_newest(self, checked: bool):
+        settings.put("compare_newest.txt", int(checked))
+        if checked:
+            self.panel.results.compare_newest()
+        else:
+            self.panel.results.set_compared(None, notify=True)
 
     def _on_selection_changed(self, *_args):
         self._update_info()
@@ -576,6 +596,10 @@ class MainWindow(QMainWindow):
     def show_context_menu(self, pos: QPoint):
         path = self.current_path()
         if path is None:
+            if self.model.folder is not None and self.model.orphans:  # 画像がなくても .txt だけ残っていることがある
+                menu = QMenu(self)
+                menu.addAction(self._orphan_menu_text()).triggered.connect(self.show_orphans)
+                menu.exec(pos)
             return
         selected = self.selected_paths()
         multi = len(selected) > 1
@@ -599,9 +623,37 @@ class MainWindow(QMainWindow):
         deselect.setEnabled(multi)
         deselect.triggered.connect(self.clear_multi)
         menu.addSeparator()
+        orphan = menu.addAction(self._orphan_menu_text())
+        orphan.setEnabled(bool(self.model.orphans))
+        orphan.triggered.connect(self.show_orphans)
+        menu.addSeparator()
         text = f"選択中の {len(selected)} 個のファイルを削除 (ごみ箱へ)\tDel" if multi else "ファイルを削除 (ごみ箱へ)\tDel"
         menu.addAction(text).triggered.connect(self.delete_selected)
         menu.exec(pos)
+
+    # ------------------------------------------------------------------
+    # 説明だけ残っている .txt
+    # ------------------------------------------------------------------
+    def _orphan_menu_text(self) -> str:
+        count = len(self.model.orphans)
+        return f"説明だけ残っている .txt を整理 ({count} 個)..." if count else "説明だけ残っている .txt はありません"
+
+    def show_orphans(self):
+        folder = self.model.folder
+        if folder is None:
+            return
+        self.model.orphans = orphans.find_orphans(folder)  # 開いたあとに変わっているかもしれないので数え直す
+        self._update_count()
+        if not self.model.orphans:
+            self.show_status("説明だけ残っている .txt はありません")
+            return
+        dialog = orphans.OrphanDialog(folder, self.model.orphans, self)
+        dialog.exec()
+        if dialog.removed:
+            gone = {results._key(p) for p in dialog.removed}
+            self.model.orphans = [p for p in self.model.orphans if results._key(p) not in gone]
+            self.show_status(f"説明だけ残っている .txt を {len(dialog.removed)} 個、ごみ箱へ送りました")
+        self._update_count()
 
     # ------------------------------------------------------------------
     # 読み取り・生成

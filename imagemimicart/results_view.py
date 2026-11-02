@@ -38,6 +38,36 @@ OLD_COLOR = QColor("#8a6d00")
 COMPARED_COLOR = QColor("#FFE84D")  # 並べて見せているもの (表示中の枠と同じ色)
 
 
+class ElidedLabel(QLabel):
+    """入りきらない文字を「…」で省く 1 行の見出し。長い文字でも枠の幅を押し広げない。"""
+
+    def __init__(self, text: str = "", parent=None):
+        super().__init__(parent)
+        self._full = ""
+        self.setText(text)
+
+    def setText(self, text: str):
+        self._full = text
+        self._elide()
+
+    def text(self) -> str:
+        return self._full
+
+    def minimumSizeHint(self) -> QSize:
+        return QSize(0, super().minimumSizeHint().height())
+
+    def sizeHint(self) -> QSize:
+        return QSize(0, super().sizeHint().height())
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._elide()
+
+    def _elide(self):
+        shown = self.fontMetrics().elidedText(self._full, Qt.TextElideMode.ElideMiddle, max(self.width(), 0))
+        super().setText(shown)
+
+
 class ThumbnailLoader(QObject):
     """裏のスレッドで 1 枚ずつサムネールを作る。新しい依頼が来たら古い依頼は捨てる。"""
 
@@ -172,7 +202,7 @@ class ResultsStrip(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 4, 0, 0)
         layout.setSpacing(2)
-        self.header = QLabel()
+        self.header = ElidedLabel()
         layout.addWidget(self.header)
         self.list = _ResultList(self)
         layout.addWidget(self.list)

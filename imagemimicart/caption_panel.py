@@ -27,11 +27,11 @@ from PySide6.QtWidgets import (
 
 from . import enhancer, llm, presets, reader, settings
 from .results import same_path as _same
-from .results_view import ResultsStrip
+from .results_view import ElidedLabel, ResultsStrip
 
 
 def _header(text: str) -> QLabel:
-    label = QLabel(text)
+    label = ElidedLabel(text)
     font = label.font()
     font.setBold(True)
     label.setFont(font)
