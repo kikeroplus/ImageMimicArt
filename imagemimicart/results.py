@@ -18,7 +18,9 @@ from typing import Optional
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QImage, QImageReader
 
-from . import comfy
+from gencommon import comfy
+
+from . import profile
 
 MOVIE_EXTS = {".mp4", ".m4v", ".webm", ".mov", ".mkv"}
 MEDIA_EXTS = MOVIE_EXTS | {".png", ".jpg", ".jpeg", ".webp", ".gif"}
@@ -53,14 +55,14 @@ def _same_text(a: str, b: str) -> bool:
 
 def _name_pattern(stem: str) -> re.Pattern:
     """その元画像の名前で保存した結果 (「名前_mimic (2).png」など)。"""
-    suffix = re.escape(comfy.OUTPUT_SUFFIX)
+    suffix = re.escape(profile.OUTPUT_SUFFIX)
     return re.compile(rf"^{re.escape(stem)}{suffix}(?: \(\d+\))?\.[^.]+$", re.IGNORECASE)
 
 
 def expected_dir(source: Path) -> Optional[Path]:
     """今の出力フォルダでの、その元画像の出力先 (出力フォルダが決まっていなければ None)。"""
     root = comfy.output_folder()
-    return comfy.output_dir_for(str(source), root) if root else None
+    return profile.output_dir_for(str(source), root) if root else None
 
 
 def find_results(source: Path, caption: Optional[str], records: Optional[list] = None) -> list[ResultFile]:
@@ -146,7 +148,7 @@ def result_counts(sources: list[Path]) -> dict[str, int]:
             by_stem: dict[str, list[str]] = {}
             for key, source in wanted.items():
                 by_stem.setdefault(source.stem.lower(), []).append(key)
-            suffix = comfy.OUTPUT_SUFFIX.lower()
+            suffix = profile.OUTPUT_SUFFIX.lower()
             for path in names:
                 lower = path.stem.lower()
                 cut = lower.rfind(suffix)

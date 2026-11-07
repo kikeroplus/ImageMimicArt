@@ -4,7 +4,7 @@ import sys
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import QApplication
 
-from . import settings, theme
+from . import profile, theme
 from .icon import make_icon
 from .main_window import MainWindow, start_path_from_args
 
@@ -52,8 +52,8 @@ def main():
     app.setApplicationName("ImageMimicArt")
     app.setWindowIcon(make_icon())
     theme.apply(app)
-    inherited = settings.inherit_from_promptwordcrafter()
-    notice = ("PromptWordCrafter の設定を引き継ぎました: " + "、".join(inherited)) if inherited else ""
+    merged = profile.setup()  # 設定の置き場所を決め、初めてなら共有の設定に移す
+    notice = ("共有の設定: " + "。".join(merged)) if merged else ""
     window = MainWindow(start_path_from_args(), notice)
     _start_server(window)
     window.show()

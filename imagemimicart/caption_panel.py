@@ -25,7 +25,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from . import enhancer, llm, presets, reader, settings
+from gencommon import enhancer, llm, presets, reader
+
+from . import settings
 from .results import same_path as _same
 from .results_view import ElidedLabel, ResultsStrip
 

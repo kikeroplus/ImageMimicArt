@@ -3,7 +3,7 @@
 
 a = Analysis(
     ['main.py'],
-    pathex=[],
+    pathex=['..\GenCommon'],
     binaries=[],
     datas=[],
     hiddenimports=['win32com.client', 'win32com.shell', 'pythoncom'],

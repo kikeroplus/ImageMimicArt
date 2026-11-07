@@ -33,10 +33,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from . import comfy, orphans, reader, results, settings
+from gencommon import comfy, reader
+from gencommon.generation import GenerationController
+
+from . import orphans, results, settings
 from .caption_panel import CaptionPanel
 from .folder_tree import FolderTree, same_path
-from .generation import GenerationController
 from .image_list import BASE_THUMB, PATH_ROLE, SORT_MODES, ImageModel, ThumbView, is_image
 from .image_view import MainView
 from .theme import BAR
@@ -172,7 +174,7 @@ class MainWindow(QMainWindow):
         self.strip = ThumbView(self.model, False, STRIP_TILE)
         self.strip.setSelectionModel(self.selection)
         self.panel = CaptionPanel()
-        self.gen = GenerationController(self, self._caption_for, self._save_caption, self.show_status)
+        self.gen = GenerationController(self, self._caption_for, self.show_status, self._save_caption)
 
         self._build_toolbar()
         center = QWidget()
@@ -732,7 +734,9 @@ class MainWindow(QMainWindow):
             self.panel.editor.document().setModified(False)  # 消す画像の説明の編集は捨てる
         first_row = self.selected_rows()[0]
         self.view.set_compare(None)
-        error = results.send_to_recycle_bin(paths)
+        # 説明プロンプトの .txt も一緒に送る (同じ名前の別の画像が残るものは残す)。数えるのは画像だけ
+        captions = reader.captions_to_remove(paths)
+        error = results.send_to_recycle_bin(paths + captions)
         gone = [p for p in paths if not p.exists()]
         for p in gone:
             self.view.refresh_file(str(p))

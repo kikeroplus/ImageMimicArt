@@ -6,7 +6,7 @@
 元画像 ─ 読み取り ─→ 説明プロンプト (photo.txt) ─ エンハンサー ─→ 盛ったプロンプト ─ ComfyUI ─→ 生成画像
 ```
 
-詳しい決まりごとは [docs/spec.md](docs/spec.md) にあります。画面と操作は J-Rate の `docs\ui-standard.md`、生成は `docs\generation-standard.md` に合わせています (生成まわりは PromptWordCrafter を引き継いでいます)。
+詳しい決まりごとは [docs/spec.md](docs/spec.md) にあります。画面と操作は J-Rate の `docs\ui-standard.md`、生成は `docs\generation-standard.md` に合わせています (生成と読み取りの部品は PromptWordCrafter と共通の `..\GenCommon\gencommon` を使います)。
 
 ## セットアップと起動
 
@@ -16,7 +16,7 @@ pip install -r requirements.txt
 
 `run_app.bat` をダブルクリックするか、このフォルダで `python main.py` を実行します。フォルダや画像のパスを引数に渡すと、そこを開きます。すでに起動しているときは、起動中のウィンドウを手前に出します。
 
-初めて起動したときは、PromptWordCrafter の設定 (LLM のサーバーURL とモデル、エンハンサー、生成の設定) を引き継ぎます。
+接続先・ワークフロー・ベースプロンプト・エンハンサー・読み取りプリセット・LLM の接続は J-Rate・PromptWordCrafter と共有します (`%APPDATA%\GenCommon\`)。初めて起動したときは、このアプリの設定を共有に移します (共有にないものを足します)。
 
 ## はじめに設定するもの
 
@@ -51,4 +51,4 @@ pip install -r requirements.txt
 
 ## 設定の保存先
 
-`%APPDATA%\ImageMimicArt\` (生成の記録・ジョブ・プリセット・画面の設定)。
+`%APPDATA%\ImageMimicArt\` (生成の記録・ジョブ・セット・前回選んだもの・画面の設定)。共有するものは `%APPDATA%\GenCommon\`。

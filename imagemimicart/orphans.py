@@ -23,7 +23,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from . import reader, results
+from gencommon import reader
+
+from . import results
 
 PATH_ROLE = Qt.ItemDataRole.UserRole
 PREVIEW_CHARS = 20000
