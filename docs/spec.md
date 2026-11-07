@@ -4,7 +4,7 @@
 「参考画像に似た絵を、プロンプト経由で作り直す」ためのもの。
 
 - 共通の決まり: `J-Rate\docs\ui-standard.md` (画面・一覧の操作)、`J-Rate\docs\generation-standard.md` (生成)。この文書に書いていないことは両文書と J-Rate の動きに合わせる。
-- 生成まわりの実装は PromptWordCrafter を引き継ぐ (`comfy.py` / `generation.py` / `llm.py` / `enhancer.py` / `results*.py`)。
+- 生成と読み取りの部品は PromptWordCrafter と共通の `GenCommon\gencommon` を使う。登録 (接続先・ワークフロー・ベースプロンプト・エンハンサー・読み取りプリセット・LLM の接続) は J-Rate・PromptWordCrafter と共有する (generation-standard 11 章)。読み取りの決まりは generation-standard 6 章「読み取り」に移した。この文書には ImageMimicArt だけのことを書く。
 - 作り: Python + PySide6 (PromptWordCrafter と同じ)。2 重に起動しない。
 
 ---
@@ -42,8 +42,8 @@ ui-standard の 1〜5・7・9〜11・13〜16 章を採用する。**評価 (6 �
 
 - 一覧の対象は画像だけ (png / jpg / jpeg / jpe / webp / bmp。動画は出さない)。出力フォルダの生成画像も、そのフォルダを開けば普通に一覧できる。
 - サムネールには印を付ける: 読み取り済み (`photo.txt` がある) は左上に「txt」、生成結果があれば右上にその数。
-- 削除 (Del) は元画像だけをごみ箱へ送る。`photo.txt` は残す。
-- **説明だけ残っている .txt** (同じ名前の画像がない `.txt`): フォルダを開いたときに数え、あればステータスバーで知らせ、右下の枚数の横に「説明だけの .txt N 個」と出す。このアプリで画像を消して `.txt` だけになったものも数に入れる。
+- 削除 (Del) は元画像と `photo.txt` を一緒にごみ箱へ送る (ui-standard 8 章「説明プロンプトの .txt」。`photo.jpg` など同じ名前の別の画像が残るときは `.txt` を残す)。
+- **説明だけ残っている .txt** (同じ名前の画像がない `.txt`): フォルダを開いたときに数え、あればステータスバーで知らせ、右下の枚数の横に「説明だけの .txt N 個」と出す。ほかのアプリで画像だけを消して `.txt` が残ったものも数に入れる。
   右クリックの「説明だけ残っている .txt を整理 (N 個)...」で一覧の窓を開く (開くときに数え直す)。左に名前、右に中身・大きさ・更新日時を出す。このアプリと関係ないテキストも同じように見えるので、**最初はどれもチェックせず**、チェックしたものだけをごみ箱へ送る (ネットワーク上なら、完全に消えることを確かめてから)。
 - **キーの例外**: キーはウインドウ全体で受けるが (ui-standard 13 章)、説明プロンプトなど文字を入力する欄にいるときはその欄に効く (矢印でカーソルが動く)。Esc で一覧に戻り、また矢印で画像を移動できる。生成結果のサムネールにいるときは、← → で生成結果を切り替える。
 - 右の下の生成結果をクリックすると、中央を左右 2 つに分けて **元画像と生成結果を並べて見せる**。Esc か同じものをもう一度クリックで元に戻す。← → で生成結果を切り替える。ダブルクリック / Enter は関連付けアプリで開く。右クリックで「開く / 生成時の設定... / エクスプローラーで開く / ファイルを削除 (ごみ箱へ)」。
@@ -83,7 +83,7 @@ generation-standard に従う (セット・プリセット・ジョブ・同時 
   - まとめてのとき: 「N 枚 (読み取り済み a 枚 / 未読み取り b 枚)」と出す。
 - 「読み取りプリセット」を置く。未読み取りの画像はこれで読み取る。「読み取り済みでも読み直す」のチェック (既定はオフ。オンなら `photo.txt` を上書き)。前回の値として覚える (生成を始めたときだけ)。
 - 「エンハンサー」(なし / 登録済み) は PromptWordCrafter と同じ。
-- プロンプトのプリセットは使わない (プロンプトは画像から作るため)。セットの中身は接続先・ワークフロー・長さだけになる。
+- プロンプトのプリセットは使わない (プロンプトは画像から作るため)。セットの中身は接続先・ワークフロー・長さ・読み取り (読み取りプリセットの名前と「読み直す」)・エンハンサー (名前) になる (generation-standard 2 章)。
 - 1 枚で未読み取りなら、その場で読み取らずにジョブの中で読み取る (生成の画面は待たせない)。
 
 ### 元画像を ComfyUI に渡すか
@@ -123,22 +123,21 @@ generation-standard に従う (セット・プリセット・ジョブ・同時 
 
 ## 5. 設定
 
-`%APPDATA%\ImageMimicArt\` に、ui-standard 15 章どおり設定 1 つにつき小さなテキストファイル 1 つで置く。生成まわりのファイルの形式は PromptWordCrafter と同じにして、エクスポートした設定を互いにインポートできるようにする。
+`%APPDATA%\ImageMimicArt\` に、ui-standard 15 章どおり設定 1 つにつき小さなテキストファイル 1 つで置く。共有するもの (接続先・ワークフロー・ベースプロンプト・`enhancer_presets.json`・`reader_presets.json`・`llm_url.txt`・`reader_model.txt`・`enhance_model.txt`・`reader_max_side.txt`) は `%APPDATA%\GenCommon\` に置く (generation-standard 8・11 章)。下の表はアプリごとのもの。
 
 | ファイル | 内容 |
 |---|---|
-| (generation-standard 8 章のもの) | 接続先・ワークフロー・セット・ベースプロンプト・記録・ジョブ |
+| (generation-standard 8 章の「アプリごと」のもの) | 使用中の番号・セット・前回の値・記録・ジョブ |
 | `output_folder.txt` | 出力フォルダ (PC ごとのものなので、エクスポートには含めない) |
-| `enhancer_presets.json` / `enhancer_generate.txt` / `enhance_preset.txt` | エンハンサー / 生成の画面で前回選んだもの / 右の枠で選んでいるもの |
-| `reader_presets.json` / `reader_generate.txt` / `reader_preset.txt` / `reader_reread.txt` | 読み取りプリセット / 同上 / 同上 / 「読み直す」のチェック |
-| `llm_url.txt` / `reader_model.txt` / `enhance_model.txt` / `reader_max_side.txt` | LLM のサーバーURL / 読み取り用モデル / エンハンサー用モデル / 送る画像の大きさ |
+| `enhancer_generate.txt` / `enhance_preset.txt` | 生成の画面で前回選んだエンハンサー / 右の枠で選んでいるもの |
+| `reader_generate.txt` / `reader_preset.txt` / `reader_reread.txt` | 生成の画面で前回選んだ読み取りプリセット / 右の枠で選んでいるもの / 「読み直す」のチェック |
 | `lastfolder.txt` / `sort.txt` / `window.txt` / `splitter.txt` | 前回のフォルダ / 並び順 / 窓の位置と大きさ / ツリー・中央・右の枠の幅 |
 | `grid_window.txt` / `grid_tile.txt` | グリッド一覧の位置と大きさ / タイルの大きさ |
 
 ## 6. 決めたこと (細部)
 
 - **縦横比・大きさ**: アプリでは触らない。ワークフローに書かれたまま生成する。
-- **初めて起動したときの引き継ぎ**: `%APPDATA%\ImageMimicArt\` が空なら、PromptWordCrafter の設定を写す。LLM のサーバーURL とモデル (`promptwordcrafter_settings.json`)、エンハンサー (`enhancer_presets.json`)、生成の設定 (`comfy_*.txt`。記録とジョブは写さない)。写したものはステータスバーで知らせる。
+- **初めて起動したときの引き継ぎ**: generation-standard 11 章「初めて共有するとき」に置き換えた (PromptWordCrafter の設定を写す仕組みはやめる)。
 - **LLM の設定**: 読み取り用モデルも初めはエンハンサー用と同じ名前を入れるが、ビジョン非対応のモデルなら画像を受け付けないので、そのときは「読み取りの設定」でビジョン対応のモデルに替えるよう案内する。
 - **読み取りのきっかけ**: 「読み取る」ボタン (Ctrl+R) と、まとめて生成のジョブの中だけ。画像を選んだだけでは読み取らない。
 - **読み取りプリセットの初期値**: アプリ側で例を 2 つ (詳しい自然文の説明 / タグ) 用意する。使いながら書き換える。
