@@ -267,6 +267,8 @@ class MainWindow(QMainWindow):
         self.generate_action = action("生成する", "表示中 (複数選択中は選択中) の画像から生成します", self.generate_selected)
         self.jobs_action = action("生成ジョブ", "生成ジョブの進み具合とキャンセル (Ctrl+J)", self.gen.show_jobs)
         action("生成の設定", "接続先・ワークフロー・ベースプロンプト・出力フォルダの登録", self.gen.show_settings)
+        action("図で設定", "設定・処理・送る前の確認を図のように並べた画面で、次に生成するときの設定を決めます (生成はしません)",
+               self.diagram_settings)
         bar.addSeparator()
         action("読み取りの設定", "LLM のサーバーURL・モデル・読み取りプリセットの登録", self.panel.show_reader_settings)
         for button in bar.findChildren(QToolButton):
@@ -670,6 +672,13 @@ class MainWindow(QMainWindow):
             self.gen.generate(paths, what="選択中の画像")
         elif self.current_path() is not None:
             self.gen.generate([self.current_path()])
+
+    def diagram_settings(self):
+        """「図で設定」: 表示中 (複数選択中は選択中の 1 枚目) の画像の説明プロンプトで、送る前の確認を見せる。"""
+        paths = self.selected_paths()
+        if not paths and self.current_path() is not None:
+            paths = [self.current_path()]
+        self.gen.show_diagram_settings(paths)
 
     def generate_all(self):
         self.gen.generate(self.model.paths(), what="一覧の画像")
