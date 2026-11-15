@@ -48,7 +48,7 @@ STRIP_TILE = 120
 GRID_TILES = (160, 240, 320)  # 小 / 中 / 大
 HELP_TEXT = ("← →・ホイール: 移動 / Home End: 先頭・末尾 / Del: ごみ箱へ削除 / Ctrl・Shift+クリック: 複数選択 / "
              "Ctrl+D: 複数選択を解除 / Ctrl+ホイール: 拡大縮小 / Ctrl+R: 読み取る / Ctrl+S: 説明を保存 / "
-             "Ctrl+O: フォルダを開く / Ctrl+G: グリッド一覧 / Ctrl+J: 生成ジョブ / Esc: 並べるのをやめる・入力欄から戻る")
+             "Ctrl+O: フォルダを開く / F5: 更新 / Ctrl+G: グリッド一覧 / Ctrl+J: 生成ジョブ / Esc: 並べるのをやめる・入力欄から戻る")
 
 NEXT_KEYS = {Qt.Key.Key_Right, Qt.Key.Key_Down, Qt.Key.Key_PageDown, Qt.Key.Key_Space}
 PREV_KEYS = {Qt.Key.Key_Left, Qt.Key.Key_Up, Qt.Key.Key_PageUp, Qt.Key.Key_Backspace}
@@ -98,7 +98,8 @@ class GridWindow(QWidget):
         self.view.context_requested.connect(main.show_context_menu)
         self.view.tile_wheel.connect(lambda step: self.set_tile(self.tile_index + step))
         self.view.verticalScrollBar().valueChanged.connect(lambda _v: self._request_large())
-        for key, func in (("Ctrl+O", main.choose_folder), ("Ctrl+D", main.clear_multi), ("Ctrl+R", main.read_current),
+        for key, func in (("Ctrl+O", main.choose_folder), ("F5", main.refresh_folder),
+                          ("Ctrl+D", main.clear_multi), ("Ctrl+R", main.read_current),
                           ("Ctrl+J", main.gen.show_jobs), ("Ctrl+S", main.panel.save)):
             QShortcut(QKeySequence(key), self).activated.connect(func)
         self._restore()
@@ -163,6 +164,7 @@ class MainWindow(QMainWindow):
         self.grid: Optional[GridWindow] = None
         self._reverting = False
         self._pending_select: Optional[str] = None
+        self._pending_row = 0  # 選び直すファイルがなくなっていたときに選ぶ位置 (「更新」)
         self._delete_key_down = False
 
         self.model = ImageModel(self)
@@ -214,7 +216,8 @@ class MainWindow(QMainWindow):
         self.gen.jobs_changed.connect(self._update_jobs_button)
         self.gen.job_done.connect(self._on_job_done)
 
-        for key, func in (("Ctrl+O", self.choose_folder), ("Ctrl+D", self.clear_multi), ("Ctrl+G", self.show_grid),
+        for key, func in (("Ctrl+O", self.choose_folder), ("F5", self.refresh_folder),
+                          ("Ctrl+D", self.clear_multi), ("Ctrl+G", self.show_grid),
                           ("Ctrl+R", self.read_current), ("Ctrl+J", self.gen.show_jobs), ("Ctrl+S", self.panel.save)):
             QShortcut(QKeySequence(key), self).activated.connect(func)
         QApplication.instance().installEventFilter(self)
@@ -246,6 +249,8 @@ class MainWindow(QMainWindow):
             return act
 
         action("フォルダを開く", "フォルダを開きます (Ctrl+O)", self.choose_folder)
+        action("更新", "フォルダツリーと一覧を読み直します (F5)。表示中のファイルはそのまま選んでおきます",
+               self.refresh_folder)
         bar.addSeparator()
         bar.addWidget(QLabel(" 並び順 "))
         self.sort_combo = QComboBox()
@@ -333,17 +338,35 @@ class MainWindow(QMainWindow):
         elif p.is_file():
             self.open_folder(str(p.parent), select=str(p))
 
-    def open_folder(self, folder: str, select: Optional[str] = None):
+    def refresh_folder(self):
+        """「更新」(F5): フォルダツリーと一覧を読み直す。表示中のファイルは選び直し、
+        なくなっていれば同じ位置 (末尾を越えたら最後) のものを選ぶ。"""
+        if QApplication.activeModalWidget() is not None:
+            return
+        self.tree.refresh()
+        if self.model.folder is None:
+            return
+        folder = str(self.model.folder)
+        current = self.current_path()
+        row = max(self.selection.currentIndex().row(), 0)
+        if self.open_folder(folder, select=str(current) if current else None, reload=True, fallback_row=row):
+            self.tree.sync_to(folder, reveal=True)
+
+    def open_folder(self, folder: str, select: Optional[str] = None, reload: bool = False,
+                    fallback_row: int = 0) -> bool:
+        """開いたら True。reload = True なら今のフォルダでも読み直す (「更新」)。"""
         if not self.panel.confirm_leave():
             if self.model.folder is not None:
                 self.tree.sync_to(str(self.model.folder))  # ツリーを今のフォルダに戻す
-            return
+            return False
         folder = str(Path(folder))
-        if self.model.folder is not None and same_path(str(self.model.folder), folder) and not self.model.loading:
+        if (not reload and self.model.folder is not None and same_path(str(self.model.folder), folder)
+                and not self.model.loading):
             if select:
                 self._select_path(select)
-            return
+            return False
         self._pending_select = select
+        self._pending_row = fallback_row
         self._reverting = True
         self.selection.clear()
         self._reverting = False
@@ -355,6 +378,7 @@ class MainWindow(QMainWindow):
         settings.put("lastfolder.txt", folder)
         self._update_count()
         self._update_actions()
+        return True
 
     def _on_folder_loaded(self, error: str):
         folder = str(self.model.folder)
@@ -365,9 +389,12 @@ class MainWindow(QMainWindow):
             self.view.show_image(None, message=f"このフォルダには画像がありません\n{folder}")
         else:
             row = self.model.row_of(self._pending_select) if self._pending_select else -1
+            if row < 0:
+                row = min(self._pending_row, len(self.model.entries) - 1)
             self.selection.setCurrentIndex(self.model.index(max(row, 0)),
                                            QItemSelectionModel.SelectionFlag.ClearAndSelect)
         self._pending_select = None
+        self._pending_row = 0
         self._update_count()
         self._update_actions()
         if not error and self.model.orphans:

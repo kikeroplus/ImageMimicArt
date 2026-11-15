@@ -251,6 +251,44 @@ class FolderTree(QTreeWidget):
     # ------------------------------------------------------------------
     # 操作
     # ------------------------------------------------------------------
+    def refresh(self):
+        """「更新」: 読み込み済みのフォルダを読み直す。展開していたフォルダは展開し直し、
+        閉じているものは次に展開したときに読み直す。PC・ネットワークの一覧はそのまま、中だけたどる。"""
+        for i in range(self.topLevelItemCount()):
+            self._refresh_item(self.topLevelItem(i))
+
+    def _refresh_item(self, item: QTreeWidgetItem):
+        if not item.data(0, LOADED_ROLE) or id(item) in self._waiting:
+            return
+        if self.kind(item) != FOLDER:
+            for i in range(item.childCount()):
+                self._refresh_item(item.child(i))
+            return
+        if not item.isExpanded():
+            item.setData(0, LOADED_ROLE, False)  # 次に展開したときに読み直す
+            return
+        keep = self._expanded_paths(item)
+        item.setData(0, LOADED_ROLE, False)
+        self.ensure_children(item, lambda: self._restore_expanded(item, keep))
+
+    def _expanded_paths(self, item: QTreeWidgetItem) -> dict:
+        """展開している子孫を {パスの小文字: その下の同じ形} で覚える。"""
+        result = {}
+        for i in range(item.childCount()):
+            child = item.child(i)
+            if child.isExpanded() and self.path(child):
+                result[self.path(child).lower()] = self._expanded_paths(child)
+        return result
+
+    def _restore_expanded(self, item: QTreeWidgetItem, keep: dict):
+        for i in range(item.childCount()):
+            child = item.child(i)
+            sub = keep.get(self.path(child).lower())
+            if sub is None:
+                continue
+            child.setExpanded(True)
+            self.ensure_children(child, lambda c=child, s=sub: self._restore_expanded(c, s))
+
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.RightButton:
             event.accept()  # 右クリックしただけでは選択を変えない (フォルダを開かない)
