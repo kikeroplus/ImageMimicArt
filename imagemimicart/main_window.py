@@ -788,7 +788,7 @@ class MainWindow(QMainWindow):
             self.view.show_image(None, message="このフォルダには画像がありません")
         self._update_count()
         if error and len(gone) < len(paths):
-            self.show_status(f"{error}: {len(paths) - len(gone)} 個 / ごみ箱へ移動 {len(gone)} 個")
+            self.show_status(f"{error}  (残った {len(paths) - len(gone)} 個 / ごみ箱へ移動 {len(gone)} 個)")
         elif len(gone) == 1:
             self.show_status(f"ごみ箱へ移動しました: {gone[0].name}")
         elif gone:
