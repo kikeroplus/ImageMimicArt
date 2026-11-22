@@ -1,5 +1,7 @@
 # ImageMimicArt
 
+> **開発終了 (2026-11-22)**: このアプリは今後使いません。画像の読み取り・生成は PrismLab のレシピ (読み取り → 盛る → 生成) で行い、J-Rate・PromptWordCrafter・MuseFactory から PrismLab のレシピを選んで生成します。共通部品 GenCommon も、このアプリとの互換を気にせず直します。
+
 手元の画像をローカル LLM (ビジョン対応) に読ませて説明プロンプトを作り、エンハンサーで盛ってから、ComfyUI で似た絵を生成する PySide6 製のアプリです。
 
 ```
